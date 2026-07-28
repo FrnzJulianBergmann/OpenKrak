@@ -29,6 +29,7 @@ import { WebSearchTool } from "./websearch"
 import { LspTool } from "./lsp"
 import * as Truncate from "./truncate"
 import { ApplyPatchTool } from "./apply_patch"
+import { PowerModeTool } from "./power-mode"
 import { Glob } from "@opencode-ai/core/util/glob"
 import path from "path"
 import { pathToFileURL } from "url"
@@ -108,6 +109,7 @@ const layer = Layer.effect(
     const edit = yield* EditTool
     const greptool = yield* GrepTool
     const patchtool = yield* ApplyPatchTool
+    const powermode = yield* PowerModeTool
     const skilltool = yield* SkillTool
     const agent = yield* Agent.Service
     const codeMode = flags.experimentalCodeMode ? yield* Effect.promise(() => import("./code-mode")) : undefined
@@ -215,6 +217,7 @@ const layer = Layer.effect(
           search: Tool.init(websearch),
           skill: Tool.init(skilltool),
           patch: Tool.init(patchtool),
+          power_mode: Tool.init(powermode),
           question: Tool.init(question),
           lsp: Tool.init(lsptool),
           plan: Tool.init(plan),
@@ -238,6 +241,7 @@ const layer = Layer.effect(
             tool.search,
             tool.skill,
             tool.patch,
+            tool.power_mode,
             ...(tool.execute ? [tool.execute] : []),
             ...(flags.experimentalLspTool ? [tool.lsp] : []),
             ...(flags.experimentalPlanMode && flags.client === "cli" ? [tool.plan] : []),
