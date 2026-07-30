@@ -1,11 +1,12 @@
-// Power Mode — Dorchester engine bridge, built into OpenKrak core.
-// Unlike a plugin tool, this ships with the client by default and cannot
-// be disabled by omission — it's always available once an OPENKRAK_API_KEY
-// is configured. The engine itself never runs here: this only calls the
-// hosted Dorchester API and returns the ExecutionBrief to the model.
+// Power Mode — Dorchester engine, bundled and running LOCALLY inside
+// OpenKrak (this file), not on a remote server. Only a lightweight license
+// check hits the network (Cloudflare Worker -> Gumroad License API).
+// The actual analysis (filesystem read, git, AST parsing) all happens on
+// the user's own machine — no repo content is ever sent anywhere.
 import { Effect, Schema } from "effect"
 import { InstanceState } from "@/effect/instance-state"
 import * as Tool from "./tool"
+import { runPipeline } from "../dorchester/interface/pipeline"
 import DESCRIPTION from "./power-mode.txt"
 
 export const Parameters = Schema.Struct({
@@ -17,7 +18,29 @@ export const Parameters = Schema.Struct({
   }),
 })
 
-const DORCHESTER_API_URL = process.env["DORCHESTER_API_URL"] ?? "https://api.openkrak.dev/v1/query"
+const LICENSE_CHECK_URL = process.env["OPENKRAK_LICENSE_URL"] ?? "https://api.openkrak.dev/v1/verify-license"
+
+// Cache the license check for the process lifetime so we don't hit the
+// network on every single tool call — just once per session.
+let cachedLicenseValid: boolean | null = null
+
+async function checkLicense(licenseKey: string): Promise<{ valid: boolean; message?: string }> {
+  if (cachedLicenseValid !== null) return { valid: cachedLicenseValid }
+  try {
+    const res = await fetch(LICENSE_CHECK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ license_key: licenseKey }),
+    })
+    const data = (await res.json()) as { valid: boolean; message?: string }
+    cachedLicenseValid = data.valid
+    return data
+  } catch {
+    // Network hiccup shouldn't hard-block a paying user mid-session.
+    // Fail open for this call, but don't cache a false positive.
+    return { valid: true, message: "license server unreachable, proceeding optimistically" }
+  }
+}
 
 export const PowerModeTool = Tool.define(
   "power_mode",
@@ -28,14 +51,23 @@ export const PowerModeTool = Tool.define(
       execute: (params: { objective: string; target?: string }, ctx: Tool.Context) =>
         Effect.gen(function* () {
           const ins = yield* InstanceState.context
-          const apiKey = process.env["OPENKRAK_API_KEY"]
+          const licenseKey = process.env["OPENKRAK_LICENSE_KEY"]
 
-          if (!apiKey) {
+          if (!licenseKey) {
             return {
-              title: "Power Mode not configured",
+              title: "Power Mode not activated",
               metadata: {},
               output:
-                "OPENKRAK_API_KEY is not set. Get one at https://openkrak.dev and set it as an environment variable to enable Power Mode.",
+                "No license key found. Get one at https://openkrak.gumroad.com and set OPENKRAK_LICENSE_KEY.",
+            }
+          }
+
+          const license = yield* Effect.promise(() => checkLicense(licenseKey))
+          if (!license.valid) {
+            return {
+              title: "Power Mode — invalid license",
+              metadata: {},
+              output: license.message ?? "Your OpenKrak license key is not valid or has expired.",
             }
           }
 
@@ -46,44 +78,24 @@ export const PowerModeTool = Tool.define(
             metadata: { objective: params.objective, target: params.target },
           })
 
-          const response = yield* Effect.promise(() =>
-            fetch(DORCHESTER_API_URL, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${apiKey}`,
-              },
-              body: JSON.stringify({
-                objective: params.objective,
-                target: params.target ?? null,
-                repo_path: ins.worktree,
-              }),
-            }),
+          // Runs entirely locally — no repo content leaves this machine.
+          const result = yield* Effect.promise(() =>
+            runPipeline({ repoPath: ins.worktree, objective: params.objective }),
           )
 
-          if (!response.ok) {
-            const errBody = yield* Effect.promise(() => response.text().catch(() => ""))
-            if (response.status === 402) {
-              return {
-                title: "Power Mode — out of credit",
-                metadata: { status: 402 },
-                output:
-                  "Your OpenKrak credit balance is exhausted for now. It tops up $2/day and rolls over — " +
-                  `you can also top up manually. (server said: ${errBody})`,
-              }
-            }
+          if (result.status === "failed") {
             return {
-              title: "Power Mode request failed",
-              metadata: { status: response.status },
-              output: `Dorchester API error ${response.status}: ${errBody}`,
+              title: "Power Mode analysis failed",
+              metadata: {},
+              output: `Engine error: ${result.error}`,
             }
           }
 
-          const brief = yield* Effect.promise(() => response.json() as Promise<Record<string, unknown>>)
+          const brief = (result.mahadata as any)?.execution_brief ?? result.mahadata
 
           return {
             title: `Power Mode: ${params.objective}`,
-            metadata: { token_budget_estimate: brief?.["token_budget_estimate"] ?? null },
+            metadata: { token_budget_estimate: brief?.token_budget_estimate ?? null },
             output: JSON.stringify(brief, null, 2),
           }
         }).pipe(Effect.orDie),

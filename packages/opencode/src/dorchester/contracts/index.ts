@@ -1,0 +1,41 @@
+// engine/contracts/index.ts
+// Single export point untuk semua contracts.
+
+export type {
+  Mahadata,
+  Meta,
+  Repository,
+  ProjectTopology,
+  NodeKind,
+  EdgeKind,
+  DependencyNode,
+  DependencyEdge,
+  DependencyGraph,
+  FileIndexEntry,
+  HotspotReasonType,
+  Hotspot,
+  FindingType,
+  FindingSeverity,
+  FindingSource,
+  FindingRawData,
+  RawDataCircularDependency,
+  RawDataMissingSymbol,
+  RawDataDeadCode,
+  RawDataDependencyIssue,
+  RawDataSecurityPattern,
+  RawDataCouplingIssue,
+  RawDataComplexityIssue,
+  RawDataArchitectureViolation,
+  Finding,
+  CorrelationImpactStep,
+  Correlation,
+  BlastRadiusEntry,
+  ExecutionTask,
+  ExecutionOrder,
+  ExecutionBrief,
+  ThreatLevel,
+  ThreatCategory,
+  ThreatMatrix,
+} from "./Mahadata.js";
+
+export type { MahadataStore } from "./MahadataStore.js";
