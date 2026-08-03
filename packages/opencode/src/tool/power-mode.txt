@@ -1,5 +1,5 @@
 Query the Dorchester engine for deep, targeted repo intelligence: structural analysis, hotspots, correlations, blast-radius impact, and an execution brief scoped to a specific objective. Use this instead of manually reading many files when you need to understand how a change to `target` will ripple through the codebase.
 
-Billed per line of code actually (re-)analyzed for this query, deducted from your OpenKrak credit balance (tops up $2/day, rolls over — never force-reset).
+Everyone gets 5 KP (Krak Pounds) free per day automatically, no signup or purchase needed — that's roughly 500,000 lines of code worth of analysis. Need more? Run `openkrak power-mode <key>` after buying a bundle at https://openkrak.dev.
 
-This is OpenKrak's signature feature: a deterministic static-analysis engine that does the heavy repo-reading so the model doesn't have to burn its own context budget doing it manually.
+This is OpenKrak's signature feature: a deterministic static-analysis engine that does the heavy repo-reading so the model doesn't have to burn its own context budget doing it manually. It runs entirely on your machine — no repo content is ever sent anywhere.
