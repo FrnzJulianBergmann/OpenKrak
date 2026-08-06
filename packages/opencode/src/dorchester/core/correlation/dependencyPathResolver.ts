@@ -10,13 +10,12 @@ export interface DependencyGraphReader {
   getDirectDependencies(nodeId: string): string[];
   getTransitiveDependencies(nodeId: string, maxDepth: number): string[];
   getShortestPath(fromId: string, toId: string): string[] | null;
+  /** O(V+E) BFS from one source — returns shortest path to EVERY reachable node at once.
+   *  Use this instead of calling getShortestPath() per-pair to avoid O(n²) BFS overhead. */
+  getShortestPathsFromSource(fromId: string): Map<string, string[]>;
   hasCycle(nodeId: string): boolean;
 }
 
-/**
- * Edge kinds included in traversal per blast_radius_engine.md §6.1
- * and correlation_engine.md §11 (re_export_resolved for path traversal)
- */
 const TRAVERSAL_EDGES = new Set<EdgeKind>([
   "import",
   "call",
@@ -28,15 +27,11 @@ const TRAVERSAL_EDGES = new Set<EdgeKind>([
 ]);
 
 export function createDependencyGraphReader(graph: DependencyGraph): DependencyGraphReader {
-  // Build adjacency map using TRAVERSAL_EDGES
-  // CRITICAL: use re_export_resolved, NOT re_export (barrel hop)
-  // per correlation_engine.md §11 behavioral contract
-  const adjMap = new Map<string, string[]>(); // from → [to]
-  const reverseMap = new Map<string, string[]>(); // to → [from]
+  const adjMap = new Map<string, string[]>();
+  const reverseMap = new Map<string, string[]>();
 
   for (const edge of graph.edges) {
     if (!TRAVERSAL_EDGES.has(edge.kind)) continue;
-    // Skip raw barrel imports — use re_export_resolved instead
     if (edge.kind === "import" && edge.is_barrel_import) continue;
 
     if (!adjMap.has(edge.from)) adjMap.set(edge.from, []);
@@ -46,7 +41,6 @@ export function createDependencyGraphReader(graph: DependencyGraph): DependencyG
     reverseMap.get(edge.to)!.push(edge.from);
   }
 
-  // Detect cycles per node (used for hasCycle)
   const cycleNodes = new Set<string>();
   for (const cyclePath of graph.stats.cycle_paths) {
     for (const nodeId of cyclePath) cycleNodes.add(nodeId);
@@ -69,9 +63,7 @@ export function createDependencyGraphReader(graph: DependencyGraph): DependencyG
         if (id !== nodeId) result.push(id);
         if (depth < maxDepth) {
           for (const neighbor of adjMap.get(id) ?? []) {
-            if (!visited.has(neighbor)) {
-              queue.push({ id: neighbor, depth: depth + 1 });
-            }
+            if (!visited.has(neighbor)) queue.push({ id: neighbor, depth: depth + 1 });
           }
         }
       }
@@ -79,8 +71,6 @@ export function createDependencyGraphReader(graph: DependencyGraph): DependencyG
     },
 
     getShortestPath(fromId: string, toId: string): string[] | null {
-      // BFS — uses re_export_resolved edges, not barrel hops
-      // Barrel nodes are NOT counted as a depth level (§11 contract)
       const visited = new Set<string>([fromId]);
       const queue: { id: string; path: string[] }[] = [{ id: fromId, path: [fromId] }];
 
@@ -94,7 +84,30 @@ export function createDependencyGraphReader(graph: DependencyGraph): DependencyG
           }
         }
       }
-      return null; // no path found
+      return null;
+    },
+
+    /**
+     * Single-source BFS — O(V+E) total. Replaces calling getShortestPath()
+     * N times (which would be O(N × (V+E))). Returns a map of nodeId → path
+     * for every node reachable from `fromId`.
+     */
+    getShortestPathsFromSource(fromId: string): Map<string, string[]> {
+      const result = new Map<string, string[]>();
+      const visited = new Set<string>([fromId]);
+      const queue: { id: string; path: string[] }[] = [{ id: fromId, path: [fromId] }];
+
+      while (queue.length > 0) {
+        const { id, path } = queue.shift()!;
+        result.set(id, path);
+        for (const neighbor of adjMap.get(id) ?? []) {
+          if (!visited.has(neighbor)) {
+            visited.add(neighbor);
+            queue.push({ id: neighbor, path: [...path, neighbor] });
+          }
+        }
+      }
+      return result;
     },
 
     hasCycle(nodeId: string): boolean {
