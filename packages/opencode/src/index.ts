@@ -45,7 +45,7 @@ function show(out: string) {
 
 const cli = yargs(args)
   .parserConfiguration({ "populate--": true })
-  .scriptName("opencode")
+  .scriptName("openkrak")
   .wrap(100)
   .help("help", "show help")
   .alias("help", "h")
@@ -142,3 +142,4 @@ try {
   // Explicitly exit to avoid any hanging subprocesses.
   process.exit()
 }
+
