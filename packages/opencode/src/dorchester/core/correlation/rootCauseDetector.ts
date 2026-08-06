@@ -2,6 +2,12 @@
 // Correlation Engine — Step 3: Root Cause Detector
 // correlation_engine.md §5 Step 3 + §6 Confidence Scoring Formula
 // Constitution Rule 3: Pure deterministic. No AI calls.
+//
+// PERF FIX: was O(n²) BFS — for each (root, related) pair it ran a full
+// BFS from scratch. Now O(n × (V+E)): one call to getShortestPathsFromSource
+// per root gives distances to ALL reachable nodes at once, then the inner
+// loop is just Map lookups. For 17k findings this cuts ~17M BFS ops down to
+// ≤ rootCandidates.length × (V+E) traversals.
 
 import type { Finding } from "../../contracts/index.js";
 import type { ClassifiedFinding } from "./findingClassifier.js";
@@ -48,15 +54,18 @@ export function detectRootCauses(
 ): RootCauseCandidate[] {
   const candidates: RootCauseCandidate[] = [];
 
-  // Only root-capable findings can be roots
   const rootCandidates = classified.filter((c) => c.can_be_root);
   const allFindings = classified.map((c) => c.finding);
 
   for (const rootCf of rootCandidates) {
     const rootFinding = rootCf.finding;
-    // Find symbol/file node for root — prefer symbol, fallback to file node
     const rootNodeId = rootFinding.symbol ?? `${rootFinding.file}::file::0`;
     const hotspotScore = hotspotScoreByFile.get(rootFinding.file) ?? 0;
+
+    // PERF: single BFS from this root to get distances to ALL reachable nodes.
+    // Previously: getShortestPath() was called once per (root, related) pair.
+    // Now: one call gives paths to every reachable node in the graph.
+    const allPaths = reader.getShortestPathsFromSource(rootNodeId);
 
     for (const relatedFinding of allFindings) {
       if (relatedFinding.id === rootFinding.id) continue;
@@ -64,14 +73,12 @@ export function detectRootCauses(
       const relatedNodeId = relatedFinding.symbol ?? `${relatedFinding.file}::file::0`;
       if (relatedNodeId === rootNodeId) continue;
 
-      // Check type compatibility
+      // O(1) Map lookup instead of O(V+E) BFS per pair
+      const path = allPaths.get(relatedNodeId);
+      if (!path) continue;
+
+      const pathLength = path.length - 1;
       const typeCompatible = isCompatibleRootCause(rootFinding.type, relatedFinding.type);
-
-      // Get shortest path between root and related
-      const path = reader.getShortestPath(rootNodeId, relatedNodeId);
-      if (!path) continue; // no dependency path — not correlated
-
-      const pathLength = path.length - 1; // edges count
       const confidence = computeConfidence(pathLength, typeCompatible, hotspotScore);
 
       if (confidence >= CONFIDENCE_THRESHOLD) {
@@ -86,6 +93,5 @@ export function detectRootCauses(
     }
   }
 
-  // Sort by confidence descending
   return candidates.sort((a, b) => b.confidence - a.confidence);
 }
