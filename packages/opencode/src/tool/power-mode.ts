@@ -9,13 +9,14 @@ import * as Tool from "./tool"
 import { runPipeline } from "../dorchester/interface/pipeline"
 import DESCRIPTION from "./power-mode.txt"
 import { randomUUID } from "node:crypto"
+import path from "node:path"
 
 export const Parameters = Schema.Struct({
   objective: Schema.String.annotate({
     description: "What you're trying to accomplish, in plain language",
   }),
   target: Schema.optional(Schema.String).annotate({
-    description: "File or symbol to focus the query on, if known",
+    description: "Subfolder or file to scope the analysis to, relative to the repo root. Default: packages/opencode. Use a smaller scope for faster results.",
   }),
 })
 
@@ -83,7 +84,10 @@ export const PowerModeTool = Tool.define(
 
           // Runs entirely locally — no repo content leaves this machine.
           const result = yield* Effect.promise(() =>
-            runPipeline({ repoPath: ins.worktree, objective: params.objective }),
+            runPipeline({
+              repoPath: params.target ? path.join(ins.worktree, params.target) : path.join(ins.worktree, "packages/opencode"),
+              objective: params.objective,
+            }),
           )
 
           if (result.status === "failed") {
