@@ -1,8 +1,8 @@
 // engine/core/deepstrikeImpl/index.ts
-// DeepStrike — Repository Intelligence Layer
+// DeepStrike – Repository Intelligence Layer
 // deepstrike.md §1 Mission + §5.1 Pipeline Steps
 // Constitution Rule 3: Pure deterministic. No AI calls.
-// Writes to MahadataStore only — no direct return of data to other components.
+// Writes to MahadataStore only – no direct return of data to other components.
 
 import type { MahadataStore, Repository, DependencyNode, Finding, FileIndexEntry } from "../../contracts/index.js";
 import { createLogger } from "../../shared/logger/index.js";
@@ -22,6 +22,7 @@ import {
 import { classifyTopology } from "./topologyClassifier.js";
 import { buildFileIndexEntry } from "./fileIndexBuilder.js";
 import { extractCyclomaticComplexity } from "./complexityExtractor.js";
+import { loadParseCache } from "./parseCache.js";
 import path from "path";
 import fs from "fs/promises";
 
@@ -36,6 +37,7 @@ export interface DeepStrikeResult {
   status: "success" | "partial" | "failed";
   files_processed: number;
   files_skipped: number;
+  cache_hits: number;
   nodes_emitted: number;
   edges_emitted: number;
   findings_emitted: number;
@@ -54,11 +56,14 @@ export async function runDeepStrike(
 
   log.info({ event: "deepstrike.start", repo_root: opts.repoRoot }, "DeepStrike started");
 
-  // ── Step 1: File Discovery ───────────────────────────
+  // -- AST Parse Cache (persistent disk cache, keyed by file path + content_hash)
+  const parseCache = await loadParseCache(opts.repoRoot);
+
+  // -- Step 1: File Discovery
   const relFiles = await discoverFiles(opts.repoRoot);
   log.info({ event: "file_discovery.complete", count: relFiles.length }, "Files discovered");
 
-  // ── Step 2: Incremental Check ────────────────────────
+  // -- Step 2: Incremental Check
   const prevHashMap = new Map(
     (opts.previousFileIndex ?? []).map((e) => [e.path, e.content_hash]),
   );
@@ -70,7 +75,7 @@ export async function runDeepStrike(
   const allFindings: Finding[] = [];
   let skipped = 0;
 
-  // ── Steps 3–5: Parse, Symbols, Edges (per file) ─────
+  // -- Steps 3-5: Parse, Symbols, Edges (per file)
   for (const relPath of relFiles) {
     const absPath = toAbsPath(opts.repoRoot, relPath);
     let content: string;
@@ -84,41 +89,57 @@ export async function runDeepStrike(
     const currentHash = hashContent(content);
     if (prevHashMap.get(relPath) === currentHash) {
       skipped++;
-      continue; // Step 2: reuse prior nodes/edges — caller must merge
+      continue;
     }
 
-    // Step 3: AST Parse
-    const { ast } = parseFile(absPath, content, opts.repoRoot);
+    // Step 3: AST Parse with persistent cache
+    let symbols: DependencyNode[];
+    let rawEdges: ReturnType<typeof extractRawEdges>;
+    let curBarrelReExports: ReturnType<typeof extractBarrelReExports>;
 
-    // Step 4: Symbol Discovery
-    const symbols = discoverSymbols(relPath, ast);
-    // Attach content_hash to all nodes in this file
+    const cached = parseCache.get(absPath, currentHash);
+    if (cached) {
+      // Cache hit - skip re-parsing
+      symbols = cached.nodes as DependencyNode[];
+      rawEdges = cached.edges as ReturnType<typeof extractRawEdges>;
+      curBarrelReExports = [];
+    } else {
+      // Cache miss - parse and cache result
+      const { ast } = parseFile(absPath, content, opts.repoRoot);
+      symbols = discoverSymbols(relPath, ast);
+      const fileNodeId = symbols.find((n) => n.kind === "file")?.id ?? (relPath + "::file::0");
+      rawEdges = extractRawEdges(relPath, ast, fileNodeId);
+      curBarrelReExports = extractBarrelReExports(relPath, ast);
+      parseCache.set(absPath, {
+        content_hash: currentHash,
+        nodes: symbols,
+        edges: rawEdges,
+        file_index: {} as any,
+      });
+    }
+
+    // Attach content_hash to all nodes
     for (const s of symbols) s.content_hash = currentHash;
     allNodes.push(...symbols);
 
-    // Step 5: Dependency Resolution
-    const fileNodeId = symbols.find((n) => n.kind === "file")?.id ?? `${relPath}::file::0`;
-    const rawEdges = extractRawEdges(relPath, ast, fileNodeId);
+    const fileNodeId = symbols.find((n) => n.kind === "file")?.id ?? (relPath + "::file::0");
     allRawEdges.push(...rawEdges);
+    allBarrelReExports.push(...curBarrelReExports);
 
-    // Extract barrel re-exports for dual-edge resolution
-    const barrelReExports = extractBarrelReExports(relPath, ast);
-    allBarrelReExports.push(...barrelReExports);
-
-    // Security pattern scan (§6.1)
+    // Security pattern scan
     const secFindings = detectSecurityPatterns(relPath, content);
     allFindings.push(...secFindings);
 
-    // File index entry + complexity extraction
+    // File index entry + complexity
     try {
       const partialEntry = await buildFileIndexEntry(opts.repoRoot, relPath, content, symbols.length);
-      // Extract complexity metrics from AST
-      const cyclomaticByFunc = extractCyclomaticComplexity(ast, relPath);
+      const { ast: astForComplexity } = parseFile(absPath, content, opts.repoRoot);
+        const cyclomaticByFunc = extractCyclomaticComplexity(astForComplexity, relPath);
       const entry: FileIndexEntry = {
         ...partialEntry,
         complexity: {
           cyclomatic: cyclomaticByFunc.size > 0 ? Math.max(...cyclomaticByFunc.values()) : null,
-          cognitive: null,  // deferred
+          cognitive: null,
           loc: content.split("\n").length,
         },
       };
@@ -128,10 +149,18 @@ export async function runDeepStrike(
     }
   }
 
-  // ── Step 6: Graph Assembly ───────────────────────────
+  // Save cache to disk (non-blocking to overall pipeline)
+  parseCache.save().catch(() => {});
+
+  log.info(
+    { event: "cache.stats", hits: parseCache.hitCount, misses: parseCache.missCount },
+    "Parse cache stats",
+  );
+
+  // -- Step 6: Graph Assembly
   const graph = assembleGraph(allNodes, allRawEdges, allBarrelReExports);
 
-  // ── Step 7: Structural Analysis ──────────────────────
+  // -- Step 7: Structural Analysis
   const { cyclePaths, detected } = detectCycles(graph);
   graph.stats.cycles_detected = detected;
   graph.stats.cycle_paths = cyclePaths;
@@ -146,11 +175,10 @@ export async function runDeepStrike(
   const deadFindings = detectDeadCode(graph, fileIndexEntries);
   allFindings.push(...deadFindings);
 
-  // ── Step 8: Project Topology ─────────────────────────
+  // -- Step 8: Project Topology
   const topology = await classifyTopology(opts.repoRoot, relFiles);
 
-  // ── Step 9: Write to MahadataStore ──────────────────
-  // Repository info
+  // -- Step 9: Write to MahadataStore
   const repoName = path.basename(opts.repoRoot);
   const repository: Repository = {
     name: repoName,
@@ -176,6 +204,7 @@ export async function runDeepStrike(
       event: "deepstrike.complete",
       files_processed: relFiles.length - skipped,
       files_skipped: skipped,
+      cache_hits: parseCache.hitCount,
       nodes: allNodes.length,
       edges: graph.edges.length,
       findings: allFindings.length,
@@ -189,6 +218,7 @@ export async function runDeepStrike(
     status: errors.length > 0 ? "partial" : "success",
     files_processed: relFiles.length - skipped,
     files_skipped: skipped,
+    cache_hits: parseCache.hitCount,
     nodes_emitted: allNodes.length,
     edges_emitted: graph.edges.length,
     findings_emitted: allFindings.length,
@@ -196,3 +226,4 @@ export async function runDeepStrike(
     errors,
   };
 }
+
