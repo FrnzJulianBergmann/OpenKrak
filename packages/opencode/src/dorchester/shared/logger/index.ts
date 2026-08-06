@@ -1,28 +1,18 @@
 // engine/shared/logger/index.ts
 // ADR-013 — Pino-based Structured Logging
-// 
-// Deterministic, structured JSON logging for all Engine components.
-// Field wajib: component (set at logger creation), scan_id (set via child context).
-// 
-// Usage:
-//   const logger = createLogger("component_name");
-//   const log = logger.child({ scan_id: "abc123" });
-//   log.info({ event: "action.start", detail: "value" }, "Human message");
 //
-// Output (deterministic JSON):
-//   {"level":30,"time":"2026-06-20T...Z","component":"component_name","scan_id":"abc123","event":"action.start","detail":"value","msg":"Human message"}
+// Output: file-only (~/.opencode/dorchester.log) when running inside a TTY
+// (e.g. the OpenKrak TUI) to avoid polluting the terminal UI.
+// Falls back to process.stderr when LOG_LEVEL=debug or NO_TTY=1 is set,
+// which is useful for raw CLI debugging outside the TUI.
 
 import pino, { type Logger as PinoLogger } from "pino";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
-/**
- * Base logger type — re-export pino.Logger for compatibility
- */
 export type Logger = PinoLogger;
 
-/**
- * Structured logging context object
- * Deterministic format: alphabetically sorted fields for consistent JSON output
- */
 export interface LogContext extends Record<string, unknown> {
   event?: string;
   scan_id?: string;
@@ -31,66 +21,55 @@ export interface LogContext extends Record<string, unknown> {
 }
 
 /**
- * Create root logger for a component.
- * 
- * @param component - Component name (e.g., "orchestrator", "action_layer")
- * @returns Configured pino Logger with component field set
- * 
- * ADR-013 requirement: every logger has a base component field.
- * Deterministic output: JSON keys are in consistent order.
+ * Resolve log destination:
+ * - DEBUG mode → stderr (developer wants to see raw logs)
+ * - Normal / TUI mode → file at ~/.opencode/dorchester.log
+ *   (keeps the TUI screen clean)
  */
+function resolveDestination(): NodeJS.WritableStream {
+  const debugMode =
+    process.env["LOG_LEVEL"] === "debug" ||
+    process.env["DORCHESTER_LOG_STDERR"] === "1";
+
+  if (debugMode) return process.stderr;
+
+  try {
+    const dir = path.join(os.homedir(), ".opencode");
+    fs.mkdirSync(dir, { recursive: true });
+    const logPath = path.join(dir, "dorchester.log");
+    // append mode — survives multiple sessions
+    return fs.createWriteStream(logPath, { flags: "a" });
+  } catch {
+    // If we can't write to disk for any reason, fall back to stderr silently
+    return process.stderr;
+  }
+}
+
+// Singleton destination — resolved once at module load
+const _dest = resolveDestination();
+
 export function createLogger(component: string): Logger {
   return pino(
     {
       level: process.env["LOG_LEVEL"] ?? "info",
       base: { component },
       timestamp: pino.stdTimeFunctions.isoTime,
-      // Deterministic serialization: fields in log objects are sorted
       formatters: {
         level: (label) => ({ level: label }),
-        // Pino's default serializers are deterministic — JSON.stringify is stable
       },
     },
-    // Output destination: stdout for Node.js (standard for structured logging)
-    process.stderr,
+    _dest,
   );
 }
 
-/**
- * Create a child logger with additional context bindings.
- * Used for request/operation tracing (scan_id, component name, request_id, etc).
- * 
- * @param parent - Parent logger to derive from
- * @param bindings - Context fields (e.g., { scan_id: "abc123" })
- * @returns Child logger with inherited context
- * 
- * Child loggers inherit all parent fields and add new ones.
- * Deterministic: context fields merged alphabetically.
- */
 export function createChildLogger(parent: Logger, bindings: LogContext): Logger {
   return parent.child(bindings);
 }
 
-/**
- * Convenience function: create child logger with scan_id and component.
- * Common pattern in Vanguard components.
- * 
- * @param parent - Parent logger
- * @param scanId - Scan/request ID for tracing
- * @returns Child logger with { scan_id, component } context
- */
 export function createScanLogger(parent: Logger, scanId: string): Logger {
   return parent.child({ scan_id: scanId });
 }
 
-/**
- * Create a child logger from existing logger and return it typed for better IDE support.
- * 
- * Example:
- *   const log = withContext(logger, { scan_id: "xyz", retry_attempt: 1 });
- *   log.debug({ event: "retry" }, "Retrying operation");
- */
 export function withContext(logger: Logger, context: LogContext): Logger {
   return logger.child(context);
 }
-
