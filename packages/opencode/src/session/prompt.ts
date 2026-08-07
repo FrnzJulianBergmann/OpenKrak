@@ -56,7 +56,6 @@ import { SessionTable } from "@opencode-ai/core/session/sql"
 import { SessionReminders } from "./reminders"
 import { SessionTools } from "./tools"
 import { LLMEvent } from "@opencode-ai/llm"
-import { isPowerModeEnabled, POWER_MODE_META_KEY } from "@/tool/power-mode-toggle"
 import { runPipeline } from "@/dorchester/interface/pipeline"
 
 // @ts-ignore
@@ -1631,6 +1630,10 @@ export const node = LayerNode.make({
 })
 
 export * as SessionPrompt from "./prompt"
+
+
+
+
 
 
 
