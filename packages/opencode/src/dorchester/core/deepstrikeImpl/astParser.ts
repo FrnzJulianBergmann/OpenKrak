@@ -1,7 +1,7 @@
 // engine/core/deepstrikeImpl/astParser.ts
-// Step 3 — AST Parsing
+// Step 3 â€” AST Parsing
 // ADR-004: @typescript-eslint/typescript-estree untuk TS/JS
-// deepstrike.md §5.0 dual-parser architecture
+// deepstrike.md Â§5.0 dual-parser architecture
 
 import { parse, simpleTraverse } from "@typescript-eslint/typescript-estree";
 import type { TSESTree } from "@typescript-eslint/typescript-estree";
@@ -27,11 +27,13 @@ export function parseFile(filePath: string, content: string, repoRoot: string): 
       tokens: false,
       comment: false,
       errorOnUnknownASTType: false,
+      // Suppress "unsupported TS version" warning from leaking into TUI stdout
+      loggerFn: false,
     });
 
     return { ast, filePath, hasTypeInfo: isTypeScript && tsconfigPath !== null };
   } catch {
-    // Return minimal AST on parse failure — do not throw
+    // Return minimal AST on parse failure â€” do not throw
     const emptyAst = parse("", { loc: true, range: true });
     return { ast: emptyAst, filePath, hasTypeInfo: false };
   }
@@ -44,3 +46,4 @@ function findTsConfig(repoRoot: string): string | null {
 
 export { simpleTraverse };
 export type { TSESTree };
+
