@@ -56,6 +56,8 @@ import { SessionTable } from "@opencode-ai/core/session/sql"
 import { SessionReminders } from "./reminders"
 import { SessionTools } from "./tools"
 import { LLMEvent } from "@opencode-ai/llm"
+import { isPowerModeEnabled, POWER_MODE_META_KEY } from "@/tool/power-mode-toggle"
+import { runPipeline } from "@/dorchester/interface/pipeline"
 
 // @ts-ignore
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -1296,7 +1298,7 @@ const layer = Layer.effect(
             if (finished && !handle.message.error) {
               // Surface any content-filter finish (e.g. Anthropic stop_reason:
               // refusal) as an error. These turns may have produced no visible
-              // output at all — previously the session went idle silently — or
+              // output at all â€” previously the session went idle silently â€” or
               // partial text that was cut off by the provider's filter.
               if (handle.message.finish === "content-filter") {
                 handle.message.error = new SessionV1.ContentFilterError({
@@ -1541,7 +1543,7 @@ export const CommandInput = Schema.Struct({
   arguments: Schema.String,
   command: Schema.String,
   variant: Schema.optional(Schema.String),
-  // Inlined (no identifier annotation) to keep the original SDK output — the
+  // Inlined (no identifier annotation) to keep the original SDK output â€” the
   // PromptInput call site below references FilePartInput by ref via the
   // Schema export in message-v2.ts.
   parts: Schema.optional(
@@ -1629,3 +1631,7 @@ export const node = LayerNode.make({
 })
 
 export * as SessionPrompt from "./prompt"
+
+
+
+
