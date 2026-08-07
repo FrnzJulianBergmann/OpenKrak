@@ -179,7 +179,23 @@ const layer = Layer.effect(
             mode: "primary",
             native: true,
           },
-          general: {
+          power: {
+            name: "power",
+            description: "Power Mode. Dorchester engine auto-analyzes the repo before every reply.",
+            options: {},
+            color: "error",
+            permission: Permission.merge(
+              defaults,
+              Permission.fromConfig({
+                question: "allow",
+                plan_enter: "allow",
+              }),
+              user,
+            ),
+            mode: "primary",
+            native: true,
+          },
+                    general: {
             name: "general",
             description: `General-purpose agent for researching complex questions and executing multi-step tasks. Use this agent to execute multiple units of work in parallel.`,
             permission: Permission.merge(
@@ -451,3 +467,5 @@ export const node = LayerNode.make({
 })
 
 export * as Agent from "./agent"
+
+
