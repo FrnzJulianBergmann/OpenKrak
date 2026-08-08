@@ -55,7 +55,8 @@ function runEngineChildProcess(repoPath: string, objective: string): any | null 
     const outDir = path.join(homedir(), ".opencode")
     mkdirSync(outDir, { recursive: true })
     const outFile = path.join(tmpdir(), `openkrak_${Date.now()}.json`)
-    const cliPath = new URL("../dorchester/interface/cli.ts", import.meta.url).pathname
+    // Resolve cli.ts relative to the opencode package root (where bun is run from)
+    const cliPath = path.join(process.cwd(), "src", "dorchester", "interface", "cli.ts")
     const r = spawnSync(process.execPath, ["run", cliPath, repoPath, objective], {
       timeout: 120_000,
       encoding: "utf8",
@@ -146,3 +147,4 @@ export const PowerModeTool = Tool.define(
     }
   }),
 )
+
