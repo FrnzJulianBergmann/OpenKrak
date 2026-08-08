@@ -1262,11 +1262,42 @@ const layer = Layer.effect(
               sys.mcp(agent, session.permission),
               MessageV2.toModelMessagesEffect(msgs, model),
             ])
-            const system = [
+            
+            // ⚡ POWER MODE — auto-inject Dorchester engine analysis (agent "power" only)
+            let powerModeContext: string | undefined
+            if (agent.name === "power") {
+              try {
+                const engineResult = await runPipeline({
+                  repoPath: ctx.worktree,
+                  objective: lastUser.parts
+                    .filter((p): p is Extract<typeof p, { type: "text" }> => p.type === "text")
+                    .map((p) => p.text)
+                    .join(" ")
+                    .slice(0, 500),
+                })
+                if (engineResult.status !== "failed") {
+                  const brief = (engineResult.mahadata as any)?.execution_brief
+                  if (brief) {
+                    powerModeContext = [
+                      "<openkrak_power_mode>",
+                      "Static repo analysis from Dorchester engine. Use this to ground answers.",
+                      "Do NOT call power_mode tool. Do NOT read files manually — use this data directly.",
+                      "",
+                      JSON.stringify(brief, null, 2),
+                      "</openkrak_power_mode>",
+                    ].join("\n")
+                  }
+                }
+              } catch {
+                // Engine failure is non-fatal — degrade gracefully
+              }
+            }
+const system = [
               ...env,
               ...instructions,
               ...(mcpInstructions ? [mcpInstructions] : []),
               ...(skills ? [skills] : []),
+              ...(powerModeContext ? [powerModeContext] : []),
             ]
             const format = lastUser.format ?? { type: "text" as const }
             if (format.type === "json_schema") system.push(STRUCTURED_OUTPUT_SYSTEM_PROMPT)
@@ -1630,6 +1661,8 @@ export const node = LayerNode.make({
 })
 
 export * as SessionPrompt from "./prompt"
+
+
 
 
 
