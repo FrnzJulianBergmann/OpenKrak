@@ -56,7 +56,6 @@ import { SessionTable } from "@opencode-ai/core/session/sql"
 import { SessionReminders } from "./reminders"
 import { SessionTools } from "./tools"
 import { LLMEvent } from "@opencode-ai/llm"
-import { runPipeline } from "@/dorchester/interface/pipeline"
 
 // @ts-ignore
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -1267,6 +1266,7 @@ const layer = Layer.effect(
             let powerModeContext: string | undefined
             if (agent.name === "power") {
               try {
+                const { runPipeline } = await import("@/dorchester/interface/pipeline")
                 const engineResult = await runPipeline({
                   repoPath: ctx.worktree,
                   objective: lastUser.parts
@@ -1661,6 +1661,7 @@ export const node = LayerNode.make({
 })
 
 export * as SessionPrompt from "./prompt"
+
 
 
 
