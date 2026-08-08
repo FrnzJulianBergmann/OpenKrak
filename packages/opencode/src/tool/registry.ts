@@ -241,7 +241,7 @@ const layer = Layer.effect(
             tool.search,
             tool.skill,
             tool.patch,
-            tool.power_mode,
+            // power_mode disabled — engine context injected via AGENTS.md when using openkrak-power
             ...(tool.execute ? [tool.execute] : []),
             ...(flags.experimentalLspTool ? [tool.lsp] : []),
             ...(flags.experimentalPlanMode && flags.client === "cli" ? [tool.plan] : []),
@@ -452,4 +452,5 @@ export const node = LayerNode.make({
 })
 
 export * as ToolRegistry from "./registry"
+
 
