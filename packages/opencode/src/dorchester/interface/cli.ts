@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // engine/interface/cli.ts
-// CLI entrypoint — jalankan pipeline dari command line.
+// CLI entrypoint â€” jalankan pipeline dari command line.
 // Usage: node cli.js <repoPath> [objective]
 
 import { runPipeline } from "./pipeline.js";
@@ -29,7 +29,8 @@ if (result.status === "failed") {
   process.exit(1);
 }
 
-// Output Mahadata ke file
-const outPath = resolve("mahadata_output.json");
+// Output Mahadata ke file (env var atau default)
+const outPath = process.env.DORCHESTER_OUT ?? resolve("mahadata_output.json");
 await writeFile(outPath, JSON.stringify(result.mahadata, null, 2), "utf-8");
-console.log(`[Vanguard] Mahadata saved: ${outPath}`);
+if (!process.env.DORCHESTER_OUT) console.log(`[Vanguard] Mahadata saved: ${outPath}`);
+
