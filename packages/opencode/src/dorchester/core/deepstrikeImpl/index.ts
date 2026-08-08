@@ -98,14 +98,17 @@ export async function runDeepStrike(
     let curBarrelReExports: ReturnType<typeof extractBarrelReExports>;
 
     const cached = parseCache.get(absPath, currentHash);
+    // ast is retained from cache miss so complexity extraction can reuse it (avoids double-parse)
+    let cachedAst: ReturnType<typeof parseFile>["ast"] | null = null;
     if (cached) {
-      // Cache hit - skip re-parsing
+      // Cache hit - skip re-parsing entirely
       symbols = cached.nodes as DependencyNode[];
       rawEdges = cached.edges as ReturnType<typeof extractRawEdges>;
       curBarrelReExports = [];
     } else {
-      // Cache miss - parse and cache result
+      // Cache miss - parse once, reuse ast for both symbol discovery and complexity
       const { ast } = parseFile(absPath, content, opts.repoRoot);
+      cachedAst = ast;
       symbols = discoverSymbols(relPath, ast);
       const fileNodeId = symbols.find((n) => n.kind === "file")?.id ?? (relPath + "::file::0");
       rawEdges = extractRawEdges(relPath, ast, fileNodeId);
@@ -133,8 +136,8 @@ export async function runDeepStrike(
     // File index entry + complexity
     try {
       const partialEntry = await buildFileIndexEntry(opts.repoRoot, relPath, content, symbols.length);
-      const { ast: astForComplexity } = parseFile(absPath, content, opts.repoRoot);
-        const cyclomaticByFunc = extractCyclomaticComplexity(astForComplexity, relPath);
+      const astForComplexity = cachedAst ?? parseFile(absPath, content, opts.repoRoot).ast;
+      const cyclomaticByFunc = extractCyclomaticComplexity(astForComplexity, relPath);
       const entry: FileIndexEntry = {
         ...partialEntry,
         complexity: {
@@ -226,4 +229,5 @@ export async function runDeepStrike(
     errors,
   };
 }
+
 
