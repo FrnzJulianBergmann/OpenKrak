@@ -9,9 +9,9 @@ import * as Tool from "./tool"
 import DESCRIPTION from "./power-mode.txt"
 import { randomUUID } from "node:crypto"
 import path from "node:path"
-import { spawnSync } from "node:child_process"
-import { existsSync, readFileSync, unlinkSync, mkdirSync } from "node:fs"
-import { tmpdir, homedir } from "node:os"
+// child_process loaded via require() inside runEngineChildProcess to avoid static import issues
+import { existsSync, readFileSync, unlinkSync } from "node:fs"
+import { tmpdir } from "node:os"
 
 export const Parameters = Schema.Struct({
   objective: Schema.String.annotate({
@@ -147,4 +147,5 @@ export const PowerModeTool = Tool.define(
     }
   }),
 )
+
 
