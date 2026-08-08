@@ -56,6 +56,10 @@ import { SessionTable } from "@opencode-ai/core/session/sql"
 import { SessionReminders } from "./reminders"
 import { SessionTools } from "./tools"
 import { LLMEvent } from "@opencode-ai/llm"
+import { spawnSync } from "node:child_process"
+import { existsSync, readFileSync, unlinkSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 
 // @ts-ignore
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -1261,32 +1265,35 @@ const layer = Layer.effect(
               sys.mcp(agent, session.permission),
               MessageV2.toModelMessagesEffect(msgs, model),
             ])
-            // ⚡ POWER MODE — inject Dorchester engine analysis into system prompt
+            // ⚡ POWER MODE — run Dorchester engine as child process, inject into system prompt
             let powerModeContext: string | undefined
             if (agent.name === "power") {
-              powerModeContext = yield* Effect.promise(async () => {
-                try {
-                  const { runPipeline } = await import("@/dorchester/interface/pipeline")
-                  const result = await runPipeline({
-                    repoPath: ctx.worktree,
-                    objective: lastUser.parts
-                      .filter((p): p is Extract<typeof p, { type: "text" }> => p.type === "text")
-                      .map((p) => p.text)
-                      .join(" ")
-                      .slice(0, 400),
-                  })
-                  const brief = (result.mahadata as any)?.execution_brief
-                  if (!brief) return undefined
-                  return [
-                    "<openkrak_power_mode>",
-                    "Dorchester static analysis. Use this data directly — do NOT call power_mode tool, do NOT read files manually.",
-                    JSON.stringify(brief, null, 2),
-                    "</openkrak_power_mode>",
-                  ].join("\n")
-                } catch {
-                  return undefined
+              try {
+                const bunBin = process.execPath
+                const cliPath = new URL("../dorchester/interface/cli.ts", import.meta.url).pathname
+                const objective = lastUser.parts
+                  .filter((p): p is Extract<typeof p, { type: "text" }> => p.type === "text")
+                  .map((p) => p.text).join(" ").slice(0, 400)
+                const outFile = join(tmpdir(), `openkrak_${Date.now()}.json`)
+                const r = spawnSync(bunBin, ["run", cliPath, ctx.worktree, objective], {
+                  timeout: 60000,
+                  encoding: "utf8",
+                  env: { ...process.env, DORCHESTER_OUT: outFile },
+                })
+                if (r.status === 0 && existsSync(outFile)) {
+                  const mahadata = JSON.parse(readFileSync(outFile, "utf8"))
+                  try { unlinkSync(outFile) } catch {}
+                  const brief = mahadata?.execution_brief
+                  if (brief) {
+                    powerModeContext = [
+                      "<openkrak_power_mode>",
+                      "Dorchester static analysis. Use this — do NOT call power_mode tool, do NOT read files.",
+                      JSON.stringify(brief, null, 2),
+                      "</openkrak_power_mode>",
+                    ].join("\n")
+                  }
                 }
-              }).pipe(Effect.orElseSucceed(() => undefined))
+              } catch { /* non-fatal */ }
             }
 
             const system = [
