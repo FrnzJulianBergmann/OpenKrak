@@ -1261,38 +1261,35 @@ const layer = Layer.effect(
               sys.mcp(agent, session.permission),
               MessageV2.toModelMessagesEffect(msgs, model),
             ])
-            
-            // ⚡ POWER MODE — auto-inject Dorchester engine analysis (agent "power" only)
+            // ⚡ POWER MODE — inject Dorchester engine analysis into system prompt
             let powerModeContext: string | undefined
             if (agent.name === "power") {
-              try {
-                const { runPipeline } = await import("@/dorchester/interface/pipeline")
-                const engineResult = await runPipeline({
-                  repoPath: ctx.worktree,
-                  objective: lastUser.parts
-                    .filter((p): p is Extract<typeof p, { type: "text" }> => p.type === "text")
-                    .map((p) => p.text)
-                    .join(" ")
-                    .slice(0, 500),
-                })
-                if (engineResult.status !== "failed") {
-                  const brief = (engineResult.mahadata as any)?.execution_brief
-                  if (brief) {
-                    powerModeContext = [
-                      "<openkrak_power_mode>",
-                      "Static repo analysis from Dorchester engine. Use this to ground answers.",
-                      "Do NOT call power_mode tool. Do NOT read files manually — use this data directly.",
-                      "",
-                      JSON.stringify(brief, null, 2),
-                      "</openkrak_power_mode>",
-                    ].join("\n")
-                  }
+              powerModeContext = yield* Effect.promise(async () => {
+                try {
+                  const { runPipeline } = await import("@/dorchester/interface/pipeline")
+                  const result = await runPipeline({
+                    repoPath: ctx.worktree,
+                    objective: lastUser.parts
+                      .filter((p): p is Extract<typeof p, { type: "text" }> => p.type === "text")
+                      .map((p) => p.text)
+                      .join(" ")
+                      .slice(0, 400),
+                  })
+                  const brief = (result.mahadata as any)?.execution_brief
+                  if (!brief) return undefined
+                  return [
+                    "<openkrak_power_mode>",
+                    "Dorchester static analysis. Use this data directly — do NOT call power_mode tool, do NOT read files manually.",
+                    JSON.stringify(brief, null, 2),
+                    "</openkrak_power_mode>",
+                  ].join("\n")
+                } catch {
+                  return undefined
                 }
-              } catch {
-                // Engine failure is non-fatal — degrade gracefully
-              }
+              }).pipe(Effect.orElseSucceed(() => undefined))
             }
-const system = [
+
+            const system = [
               ...env,
               ...instructions,
               ...(mcpInstructions ? [mcpInstructions] : []),
@@ -1300,7 +1297,7 @@ const system = [
               ...(powerModeContext ? [powerModeContext] : []),
             ]
             const format = lastUser.format ?? { type: "text" as const }
-            if (format.type === "json_schema") system.push(STRUCTURED_OUTPUT_SYSTEM_PROMPT)
+            if (format.type === "json_schema") system.push(STRUCTURED_OUTPUT_SYSTEM_PROMPT)PROMPT)
             const result = yield* handle.process({
               user: lastUser,
               agent,
@@ -1328,7 +1325,7 @@ const system = [
             if (finished && !handle.message.error) {
               // Surface any content-filter finish (e.g. Anthropic stop_reason:
               // refusal) as an error. These turns may have produced no visible
-              // output at all â€” previously the session went idle silently â€” or
+              // output at all — previously the session went idle silently — or
               // partial text that was cut off by the provider's filter.
               if (handle.message.finish === "content-filter") {
                 handle.message.error = new SessionV1.ContentFilterError({
@@ -1573,7 +1570,7 @@ export const CommandInput = Schema.Struct({
   arguments: Schema.String,
   command: Schema.String,
   variant: Schema.optional(Schema.String),
-  // Inlined (no identifier annotation) to keep the original SDK output â€” the
+  // Inlined (no identifier annotation) to keep the original SDK output — the
   // PromptInput call site below references FilePartInput by ref via the
   // Schema export in message-v2.ts.
   parts: Schema.optional(
@@ -1661,14 +1658,4 @@ export const node = LayerNode.make({
 })
 
 export * as SessionPrompt from "./prompt"
-
-
-
-
-
-
-
-
-
-
 
