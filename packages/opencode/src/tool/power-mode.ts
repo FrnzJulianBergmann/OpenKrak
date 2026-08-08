@@ -6,10 +6,12 @@ import { Effect, Schema } from "effect"
 import { InstanceState } from "@/effect/instance-state"
 import { Auth } from "@/auth"
 import * as Tool from "./tool"
-import { runPipeline } from "../dorchester/interface/pipeline"
 import DESCRIPTION from "./power-mode.txt"
 import { randomUUID } from "node:crypto"
 import path from "node:path"
+import { spawnSync } from "node:child_process"
+import { existsSync, readFileSync, unlinkSync, mkdirSync } from "node:fs"
+import { tmpdir, homedir } from "node:os"
 
 export const Parameters = Schema.Struct({
   objective: Schema.String.annotate({
@@ -22,16 +24,9 @@ export const Parameters = Schema.Struct({
 
 const CREDIT_SERVER_URL = process.env["OPENKRAK_LICENSE_URL"] ?? "https://openkrak-license-server.openkrak.workers.dev"
 
-/**
- * Every OpenKrak install gets a stable anonymous device id the first time
- * Power Mode is used — this is what the free 5 KP/day is tracked against.
- * No account, no email, no purchase required. Stored via the same Auth
- * service used for provider API keys (0600 perms).
- */
 async function getOrCreateAccountKey(): Promise<string> {
   const existing = await Auth.Service.use((auth) => auth.get("openkrak-power-mode"))
   if (existing && existing.type === "api") return existing.key
-
   const deviceKey = `device_${randomUUID()}`
   await Auth.Service.use((auth) => auth.set("openkrak-power-mode", { type: "api", key: deviceKey }))
   return deviceKey
@@ -51,6 +46,29 @@ async function deduct(accountKey: string, locProcessed: number, objective: strin
   })
   const data = (await res.json()) as { ok?: boolean; message?: string; balance_micros?: number }
   return { status: res.status, data }
+}
+
+// Run Dorchester engine as child process — avoids module boundary issues
+// with --conditions=browser context used by the TUI
+function runEngineChildProcess(repoPath: string, objective: string): any | null {
+  try {
+    const outDir = path.join(homedir(), ".opencode")
+    mkdirSync(outDir, { recursive: true })
+    const outFile = path.join(tmpdir(), `openkrak_${Date.now()}.json`)
+    const cliPath = new URL("../dorchester/interface/cli.ts", import.meta.url).pathname
+    const r = spawnSync(process.execPath, ["run", cliPath, repoPath, objective], {
+      timeout: 120_000,
+      encoding: "utf8",
+      env: { ...process.env, DORCHESTER_OUT: outFile, DORCHESTER_LOG_STDERR: "0" },
+    })
+    if (r.status !== 0) return null
+    if (!existsSync(outFile)) return null
+    const data = JSON.parse(readFileSync(outFile, "utf8"))
+    try { unlinkSync(outFile) } catch {}
+    return data
+  } catch {
+    return null
+  }
 }
 
 export const PowerModeTool = Tool.define(
@@ -82,23 +100,24 @@ export const PowerModeTool = Tool.define(
             metadata: { objective: params.objective, target: params.target },
           })
 
-          // Runs entirely locally — no repo content leaves this machine.
-          const result = yield* Effect.promise(() =>
-            runPipeline({
-              repoPath: params.target ? path.join(ins.worktree, params.target) : path.join(ins.worktree, "packages/opencode"),
-              objective: params.objective,
-            }),
+          const repoPath = params.target
+            ? path.join(ins.worktree, params.target)
+            : path.join(ins.worktree, "packages/opencode")
+
+          // Engine runs as child process — no module import issues
+          const mahadata = yield* Effect.promise(() =>
+            Promise.resolve(runEngineChildProcess(repoPath, params.objective)),
           )
 
-          if (result.status === "failed") {
+          if (!mahadata) {
             return {
               title: "Power Mode analysis failed",
               metadata: {},
-              output: `Engine error: ${result.error}`,
+              output: "Engine error: child process failed or timed out.",
             }
           }
 
-          const repo = (result.mahadata as any)?.repository as { total_loc?: number } | undefined
+          const repo = mahadata?.repository as { total_loc?: number } | undefined
           const locProcessed = repo?.total_loc ?? 0
 
           const { status, data } = yield* Effect.promise(() =>
@@ -113,7 +132,7 @@ export const PowerModeTool = Tool.define(
             }
           }
 
-          const brief = (result.mahadata as any)?.execution_brief ?? result.mahadata
+          const brief = mahadata?.execution_brief ?? mahadata
 
           return {
             title: `Power Mode: ${params.objective}`,
