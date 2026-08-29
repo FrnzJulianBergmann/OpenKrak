@@ -1,13 +1,13 @@
-﻿// openkrak-mcp/src/license/check.ts
-// License gate â€” Free tier (CF Worker) or Pro (key validation)
-// v1.0.3: adds error telemetry
+// openkrak-mcp/src/license/check.ts
+// License gate — Free tier (CF Worker) or Pro (key validation)
+// v1.0.6: usage analytics + token tracking
 
 import { createHash } from "node:crypto";
 import { hostname, userInfo } from "node:os";
 
 const WORKER_URL = "https://openkrak-license-server.openkrak.workers.dev";
 const PRO_KEY = process.env.OPENKRAK_KEY;
-const VERSION = "1.0.3";
+const VERSION = "1.0.6";
 
 function getFingerprint(): string {
   const raw = `${hostname()}:${userInfo().username}`;
@@ -47,23 +47,31 @@ export async function checkLicense(tool = "unknown"): Promise<LicenseResult> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ fingerprint: fp, tool }),
     });
-    const data = (await res.json()) as { allowed?: boolean; remaining?: number; reason?: string };
+    const data = (await res.json()) as { allowed?: boolean; remaining?: number };
     if (data.allowed) return { allowed: true, tier: "free", remaining: data.remaining };
     return {
       allowed: false, tier: "blocked",
-      reason: `Free tier limit reached (15 calls/24h). Upgrade at openkrak-web.vercel.app â€” $8/month unlimited.`,
+      reason: `Free tier limit reached (15 calls/24h). Upgrade at openkrak-web.vercel.app — $8/month unlimited.`,
     };
   } catch {
     return { allowed: true, tier: "free" };
   }
 }
 
-// â”€â”€ Error telemetry â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// Fire-and-forget â€” never blocks or throws
+// ── Token tracking — fire and forget ────────────────────
+export function trackTokens(tokensSaved: number, tool: string): void {
+  const fp = getFingerprint();
+  fetch(`${WORKER_URL}/v3/track-tokens`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tokens_saved: tokensSaved, tool, fingerprint: fp, version: VERSION }),
+  }).catch(() => {});
+}
+
+// ── Error telemetry — fire and forget ───────────────────
 export function reportError(tool: string, err: unknown): void {
   const message = err instanceof Error ? err.message : String(err);
   const fp = getFingerprint();
-
   fetch(`${WORKER_URL}/v3/telemetry`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -71,4 +79,16 @@ export function reportError(tool: string, err: unknown): void {
   }).catch(() => {});
 }
 
-
+// ── Token estimation ─────────────────────────────────────
+// tokens_saved = tokens LLM would have read (raw files) - tokens Mahadata actually sent
+export function estimateTokensSaved(
+  totalLoc: number,
+  totalFiles: number,
+  mahadataOutput: string
+): number {
+  // Raw: LLM reads all files — ~1.3 tokens per line + file overhead
+  const rawTokens = Math.round(totalLoc * 1.3 + totalFiles * 15);
+  // Actual: Mahadata output length / 4 (rough token estimate)
+  const mahadataTokens = Math.round(mahadataOutput.length / 4);
+  return Math.max(0, rawTokens - mahadataTokens);
+}

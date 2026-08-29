@@ -1,5 +1,6 @@
 // openkrak-mcp/src/tools/get_mahadata.ts
 import { runPipeline } from "dorchester";
+import { trackTokens, estimateTokensSaved } from "../license/check.js";
 
 export async function handleGetMahadata(args: {
   path: string;
@@ -32,7 +33,6 @@ export async function handleGetMahadata(args: {
     };
   }
 
-  // Scale detail level with repo size
   const totalFiles = Number(repo?.total_files ?? 0);
   const hotspotLimit = totalFiles < 50 ? 3 : totalFiles < 200 ? 5 : totalFiles < 500 ? 8 : 12;
   const blastLimit = totalFiles < 50 ? 3 : totalFiles < 200 ? 5 : 8;
@@ -82,5 +82,12 @@ export async function handleGetMahadata(args: {
     }),
   ].filter((l): l is string => l !== null);
 
-  return { content: [{ type: "text", text: lines.join("\n") }] };
+  const output = lines.join("\n");
+
+  // Track tokens saved
+  const totalLoc = Number(repo?.total_loc ?? 0);
+  const saved = estimateTokensSaved(totalLoc, totalFiles, output);
+  trackTokens(saved, "get_mahadata");
+
+  return { content: [{ type: "text", text: output }] };
 }

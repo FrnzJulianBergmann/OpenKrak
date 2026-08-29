@@ -1,5 +1,6 @@
 // openkrak-mcp/src/tools/analyze_repo.ts
 import { runPipeline } from "dorchester";
+import { trackTokens, estimateTokensSaved } from "../license/check.js";
 
 export async function handleAnalyzeRepo(args: {
   path: string;
@@ -43,11 +44,13 @@ export async function handleAnalyzeRepo(args: {
     brief?.repository_summary ? `Summary: ${brief.repository_summary}` : "",
     ``,
     `Scan ID: ${(meta?.scan_id as string) ?? "?"}`,
-  ]
-    .filter(Boolean)
-    .join("\n");
+  ].filter(Boolean).join("\n");
 
-  return {
-    content: [{ type: "text", text: summary }],
-  };
+  // Track tokens saved — fire and forget
+  const totalLoc = Number(repo?.total_loc ?? 0);
+  const totalFiles = Number(repo?.total_files ?? 0);
+  const saved = estimateTokensSaved(totalLoc, totalFiles, summary);
+  trackTokens(saved, "analyze_repo");
+
+  return { content: [{ type: "text", text: summary }] };
 }
