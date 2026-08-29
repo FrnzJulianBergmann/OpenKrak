@@ -1,8 +1,7 @@
 {
   "name": "openkrak-mcp",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "OpenKrak MCP Server — AI coding intelligence via Dorchester engine",
-  "type": "module",
   "bin": {
     "openkrak-mcp": "./dist/index.js"
   },
@@ -12,7 +11,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --format esm --out-dir dist --no-splitting --dts false",
+    "build": "tsup src/index.ts --format cjs --out-dir dist --no-splitting",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js"
   },

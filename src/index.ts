@@ -94,7 +94,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
-  // License gate — runs before every tool call
   const license = await checkLicense();
   if (!license.allowed) {
     return {
@@ -129,5 +128,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 // ── Start ────────────────────────────────────────────────
-const transport = new StdioServerTransport();
-await server.connect(transport);
+async function main() {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+}
+
+main().catch((err) => {
+  process.stderr.write(`OpenKrak fatal: ${err.message}\n`);
+  process.exit(1);
+});
