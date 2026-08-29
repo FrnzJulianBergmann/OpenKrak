@@ -1,0 +1,6 @@
+node_modules/
+dist/
+mahadata_output.json
+mahadata_*.json
+.env
+*.local
