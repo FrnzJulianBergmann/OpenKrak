@@ -1,31 +1,32 @@
-﻿{
-    "name":  "openkrak-mcp",
-    "version":  "1.0.5",
-    "description":  "OpenKrak MCP Server â€” AI coding intelligence via Dorchester engine",
-    "bin":  {
-                "openkrak-mcp":  "./dist/index.js"
-            },
-    "main":  "./dist/index.js",
-    "files":  [
-                  "dist",
-                  "README.md"
-              ],
-    "scripts":  {
-                    "build":  "tsup",
-                    "dev":  "tsx src/index.ts",
-                    "start":  "node dist/index.js"
-                },
-    "dependencies":  {
-                         "@modelcontextprotocol/sdk":  "^1.0.0"
-                     },
-    "devDependencies":  {
-                            "@types/node":  "^20.0.0",
-                            "dorchester":  "file:../engine-dorchester",
-                            "tsup":  "^8.0.0",
-                            "tsx":  "^4.0.0",
-                            "typescript":  "^5.0.0"
-                        },
-    "engines":  {
-                    "node":  "\u003e=18"
-                }
+{
+  "name": "openkrak-mcp",
+  "version": "1.0.6",
+  "description": "OpenKrak MCP Server - AI coding intelligence via Dorchester engine",
+  "bin": {
+    "openkrak-mcp": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "dorchester": "file:../engine-dorchester",
+    "tsup": "^8.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
 }

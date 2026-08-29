@@ -93,7 +93,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
-  const license = await checkLicense();
+  const license = await checkLicense(name);
   if (!license.allowed) {
     return {
       content: [{ type: "text", text: `OpenKrak: ${license.reason}` }],
@@ -137,5 +137,6 @@ main().catch((err) => {
   process.stderr.write(`OpenKrak fatal: ${err.message}\n`);
   process.exit(1);
 });
+
 
 

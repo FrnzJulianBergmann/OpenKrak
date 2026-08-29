@@ -1,5 +1,5 @@
-// openkrak-mcp/src/license/check.ts
-// License gate — Free tier (CF Worker) or Pro (key validation)
+﻿// openkrak-mcp/src/license/check.ts
+// License gate â€” Free tier (CF Worker) or Pro (key validation)
 // v1.0.3: adds error telemetry
 
 import { createHash } from "node:crypto";
@@ -21,7 +21,7 @@ export interface LicenseResult {
   remaining?: number;
 }
 
-export async function checkLicense(): Promise<LicenseResult> {
+export async function checkLicense(tool = "unknown"): Promise<LicenseResult> {
   if (PRO_KEY) {
     try {
       const res = await fetch(`${WORKER_URL}/v3/validate`, {
@@ -45,21 +45,21 @@ export async function checkLicense(): Promise<LicenseResult> {
     const res = await fetch(`${WORKER_URL}/v3/free-query`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fingerprint: fp }),
+      body: JSON.stringify({ fingerprint: fp, tool }),
     });
     const data = (await res.json()) as { allowed?: boolean; remaining?: number; reason?: string };
     if (data.allowed) return { allowed: true, tier: "free", remaining: data.remaining };
     return {
       allowed: false, tier: "blocked",
-      reason: `Free tier limit reached (15 calls/24h). Upgrade at openkrak-web.vercel.app — $8/month unlimited.`,
+      reason: `Free tier limit reached (15 calls/24h). Upgrade at openkrak-web.vercel.app â€” $8/month unlimited.`,
     };
   } catch {
     return { allowed: true, tier: "free" };
   }
 }
 
-// ── Error telemetry ──────────────────────────────────────
-// Fire-and-forget — never blocks or throws
+// â”€â”€ Error telemetry â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Fire-and-forget â€” never blocks or throws
 export function reportError(tool: string, err: unknown): void {
   const message = err instanceof Error ? err.message : String(err);
   const fp = getFingerprint();
@@ -70,3 +70,5 @@ export function reportError(tool: string, err: unknown): void {
     body: JSON.stringify({ tool, error: message, version: VERSION, fingerprint: fp }),
   }).catch(() => {});
 }
+
+
