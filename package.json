@@ -1,7 +1,8 @@
 {
   "name": "openkrak-mcp",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "OpenKrak MCP Server - AI coding intelligence via Dorchester engine",
+  "type": "commonjs",
   "bin": {
     "openkrak-mcp": "./dist/index.js"
   },
