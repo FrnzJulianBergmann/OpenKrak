@@ -2,7 +2,7 @@
 
 MCP server for developer tooling. Performs static analysis on a software repository via the Dorchester engine and delivers a structured context brief to the language model before any file is accessed.
 
-**Current integration:** OpenCode. Claude Code, Codex, and Cursor support in development.
+**Supported:** OpenCode (TUI + Desktop). Claude Code, Codex, and Cursor support in development.
 
 ---
 
@@ -46,9 +46,21 @@ Requires Node.js ≥ 18.
 
 ---
 
-## Setup — OpenCode
+## Setup
 
-**Step 1.** Open `~/.config/opencode/opencode.jsonc` and add the `mcp` block:
+OpenKrak works with both **OpenCode TUI** and **OpenCode Desktop**. The config file and setup steps are identical for both.
+
+### Config file location
+
+| Platform | Path |
+|----------|------|
+| Windows | `C:\Users\<username>\.config\opencode\opencode.jsonc` |
+| macOS | `~/.config/opencode/opencode.jsonc` |
+| Linux | `~/.config/opencode/opencode.jsonc` |
+
+### Step 1 — Add OpenKrak to your config
+
+Open the config file and add the `mcp` block:
 
 ```jsonc
 {
@@ -63,21 +75,49 @@ Requires Node.js ≥ 18.
 }
 ```
 
-> Windows: `C:\Users\<username>\.config\opencode\opencode.jsonc`  
-> macOS / Linux: `~/.config/opencode/opencode.jsonc`
+### Step 2 — Restart OpenCode
 
-**Step 2.** Restart OpenCode. Confirm **openkrak Connected** appears in the MCP panel.
+Close and reopen OpenCode (TUI or Desktop). Confirm **openkrak Connected** appears in the MCP panel.
 
-**Step 3.** Open any repository and run a coding task. OpenKrak runs automatically before the language model accesses any file.
+> **OpenCode Desktop:** MCP status is shown in the bottom status bar. Green dot = connected.  
+> **OpenCode TUI:** MCP status is shown in the top-right panel.
 
-To invoke explicitly:
+### Step 3 — Run your first analysis
+
+Open any repository in OpenCode and send a message:
+
 ```
-Use analyze_repo on /path/to/your/repo with objective "refactor the auth module"
+analyze_repo on /absolute/path/to/your/repo
+```
+
+Or just start a coding task normally — OpenKrak runs automatically before the model reads any file.
+
+---
+
+## Tools
+
+| Tool | When to use |
+|------|-------------|
+| `analyze_repo` | Full pipeline. Call before any coding task on a new repo. Returns dependency graph, hotspot rankings, blast radius, and threat matrix. |
+| `get_mahadata` | Compact repo brief — structure, entry points, constraints, risk score. Use when you need repo-wide context without a full re-analysis. |
+| `get_hotspots` | Ranked list of high-risk files by complexity, coupling, and change frequency. Use before reviewing or refactoring. |
+| `blast_radius` | Impact map for a specific file. Which files, modules, and APIs are affected by a change. Use before modifying a critical file. |
+
+### Example prompts
+
+```
+analyze_repo on /path/to/repo with objective "refactor the auth module"
+```
+```
+Run get_hotspots on /path/to/repo — which files should I avoid touching?
+```
+```
+blast_radius on /path/to/repo for file src/api/routes/user.ts
 ```
 
 ---
 
-## Enabling and Disabling
+## Enable / Disable
 
 Set `"enabled"` in your config and restart OpenCode:
 
@@ -88,20 +128,9 @@ Set `"enabled"` in your config and restart OpenCode:
 
 ---
 
-## Tools
+## Pro License
 
-| Tool | Description |
-|------|-------------|
-| `analyze_repo` | Full Dorchester pipeline. Returns dependency graph, hotspot rankings, blast radius, and threat matrix. Call before any coding task. |
-| `get_mahadata` | Compact repository intelligence brief. Structure, entry points, constraints, risk score. |
-| `get_hotspots` | Ranked list of high-risk files by complexity, coupling, and change frequency. |
-| `blast_radius` | Impact map for a specific file change. Which files, modules, and APIs are affected. |
-
----
-
-## License Tiers
-
-Free tier is active by default — no account or configuration required.
+Free tier is active by default — no account required.
 
 | Plan | Price | Queries |
 |------|-------|---------|
@@ -109,7 +138,7 @@ Free tier is active by default — no account or configuration required.
 | Pro Monthly | $8 / month | Unlimited |
 | Pro Annual | $67.20 / year | Unlimited |
 
-To activate a Pro license, add your key to the MCP config:
+To activate Pro, add your key to the config:
 
 ```jsonc
 {
@@ -127,7 +156,7 @@ To activate a Pro license, add your key to the MCP config:
 }
 ```
 
-License keys are available at [openkrak-web.vercel.app](https://openkrak-web.vercel.app). Delivered instantly via email after purchase. No subscription, no auto-renewal.
+License keys: [openkrak-web.vercel.app](https://openkrak-web.vercel.app). Delivered via email after purchase. No subscription, no auto-renewal.
 
 ---
 
@@ -135,7 +164,7 @@ License keys are available at [openkrak-web.vercel.app](https://openkrak-web.ver
 
 - Static analysis only. No AI inference in the pipeline.
 - Anonymous usage telemetry is collected (query count, tool name, error events). No source code or file contents are transmitted.
-- License validation requires a network call to verify your key against the license server.
+- License validation requires a network call to the license server on each tool invocation.
 
 ---
 
