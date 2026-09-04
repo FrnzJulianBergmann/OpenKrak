@@ -1,0 +1,23 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.FrnzJulianBergmann/openkrak",
+  "title": "OpenKrak",
+  "description": "MCP server that performs static analysis on a repository via the Dorchester engine — dependency graph construction, complexity scoring, blast radius mapping — and delivers a structured context brief to the language model before any file is read.",
+  "version": "1.0.10",
+  "repository": {
+    "url": "https://github.com/FrnzJulianBergmann/openkrak",
+    "source": "github"
+  },
+  "websiteUrl": "https://openkrak-web.vercel.app",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "openkrak-mcp",
+      "version": "1.0.10",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
