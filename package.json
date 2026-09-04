@@ -1,6 +1,6 @@
 {
   "name": "openkrak-mcp",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "description": "OpenKrak MCP Server - AI coding intelligence via Dorchester engine",
   "mcpName": "io.github.FrnzJulianBergmann/openkrak",
   "type": "commonjs",
