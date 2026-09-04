@@ -1,26 +1,14 @@
 # openkrak-mcp
 
-**AI coding intelligence for any coding agent — delivered as an MCP server.**
+MCP server for developer tooling. Performs static analysis on a software repository via the Dorchester engine and delivers a structured context brief to the language model before any file is accessed.
 
-OpenKrak pre-computes your repository's structure and delivers a structured intelligence brief (Mahadata) before your LLM runs. Less hallucination, lower token cost, faster answers.
-
----
-
-## The Problem
-
-Every time you ask your coding agent to modify code, the LLM starts blind — reading raw files, burning tokens, guessing dependencies.
-
-**Without OpenKrak:** LLM reads 50,000+ tokens of raw files. Slow. Expensive. Blind.  
-**With OpenKrak:** LLM reads a pre-computed Mahadata brief. Precise. Cheap. Aware.
-
-For simple tasks, OpenKrak replaces 50+ file reads with a single tool call.  
-For complex refactors, it cuts token usage 20-30% and eliminates blind exploration — the LLM knows exactly which files matter before it reads a single line.
+**Current integration:** OpenCode. Claude Code, Codex, and Cursor support in development.
 
 ---
 
 ## How It Works
 
-OpenKrak runs the **Dorchester engine** — a 6-step static analysis pipeline:
+OpenKrak runs the **Dorchester engine** — a six-step static analysis pipeline — on your repository before the language model executes any task.
 
 ```
 Repository
@@ -41,21 +29,10 @@ Blast Radius        — Ripple effects of any change mapped before commit
 Execution Gate      — Analysis validated and normalized
     │
     ▼
-Mahadata            — Structured intelligence brief delivered to your coding agent
+Mahadata            — Structured brief delivered to the language model
 ```
 
-Your codebase never leaves your machine. All analysis runs locally.
-
----
-
-## Supported Agents
-
-| Agent | Status |
-|-------|--------|
-| **OpenCode** | ✅ Supported |
-| Claude Code | 🔜 Coming soon |
-| Codex | 🔜 Coming soon |
-| Cursor | 🔜 Coming soon |
+All analysis runs locally. Your codebase does not leave your machine.
 
 ---
 
@@ -65,13 +42,13 @@ Your codebase never leaves your machine. All analysis runs locally.
 npm install -g openkrak-mcp
 ```
 
+Requires Node.js ≥ 18.
+
 ---
 
 ## Setup — OpenCode
 
-### Step 1 — Edit config
-
-Open `~/.config/opencode/opencode.jsonc` and add the `mcp` block:
+**Step 1.** Open `~/.config/opencode/opencode.jsonc` and add the `mcp` block:
 
 ```jsonc
 {
@@ -80,91 +57,59 @@ Open `~/.config/opencode/opencode.jsonc` and add the `mcp` block:
     "openkrak": {
       "type": "local",
       "enabled": true,
-      "command": ["openkrak-mcp"]
+      "command": ["npx", "openkrak-mcp"]
     }
   }
 }
 ```
 
-> **Windows path:** `C:\Users\<username>\.config\opencode\opencode.jsonc`  
-> **Mac/Linux path:** `~/.config/opencode/opencode.jsonc`
+> Windows: `C:\Users\<username>\.config\opencode\opencode.jsonc`  
+> macOS / Linux: `~/.config/opencode/opencode.jsonc`
 
-### Step 2 — Restart OpenCode
+**Step 2.** Restart OpenCode. Confirm **openkrak Connected** appears in the MCP panel.
 
-Close and reopen OpenCode. You should see **openkrak Connected** in the top-right MCP panel.
+**Step 3.** Open any repository and run a coding task. OpenKrak runs automatically before the language model accesses any file.
 
-### Step 3 — Use it
-
-Just open a repo and ask your agent anything. OpenKrak automatically runs before the LLM touches your files.
-
-Or call it explicitly:
-
+To invoke explicitly:
 ```
 Use analyze_repo on /path/to/your/repo with objective "refactor the auth module"
 ```
 
 ---
 
-## Turning OpenKrak On / Off
+## Enabling and Disabling
 
-Change `"enabled"` in your config:
+Set `"enabled"` in your config and restart OpenCode:
 
 ```jsonc
-// ON
-"enabled": true
-
-// OFF
-"enabled": false
-```
-
-Then restart OpenCode. That's it.
-
-**Quick toggle scripts (optional):**
-
-Save these two files anywhere on your machine.
-
-`mcp-on.ps1` (Windows PowerShell):
-```powershell
-$config = Get-Content "$env:USERPROFILE\.config\opencode\opencode.jsonc" | ConvertFrom-Json -AsHashtable
-$config.mcp.openkrak.enabled = $true
-$config | ConvertTo-Json -Depth 10 | Set-Content "$env:USERPROFILE\.config\opencode\opencode.jsonc"
-Write-Host "OpenKrak: ON"
-```
-
-`mcp-off.ps1` (Windows PowerShell):
-```powershell
-$config = Get-Content "$env:USERPROFILE\.config\opencode\opencode.jsonc" | ConvertFrom-Json -AsHashtable
-$config.mcp.openkrak.enabled = $false
-$config | ConvertTo-Json -Depth 10 | Set-Content "$env:USERPROFILE\.config\opencode\opencode.jsonc"
-Write-Host "OpenKrak: OFF"
-```
-
-Run with:
-```powershell
-powershell -File mcp-on.ps1
-powershell -File mcp-off.ps1
+"enabled": true   // on
+"enabled": false  // off
 ```
 
 ---
 
 ## Tools
 
-Once connected, your coding agent has access to 4 tools:
-
-| Tool | When to use |
+| Tool | Description |
 |------|-------------|
-| `analyze_repo` | Before any coding task — runs full Dorchester pipeline, returns dependency graph, hotspots, blast radius, threat matrix |
-| `get_mahadata` | Quick 500-token intelligence brief — repo structure, entry points, constraints, risk score |
-| `get_hotspots` | Which files are most dangerous to touch — ranked by complexity, coupling, change frequency |
-| `blast_radius` | Ripple effect of modifying a specific file — which files, modules, APIs will be affected |
+| `analyze_repo` | Full Dorchester pipeline. Returns dependency graph, hotspot rankings, blast radius, and threat matrix. Call before any coding task. |
+| `get_mahadata` | Compact repository intelligence brief. Structure, entry points, constraints, risk score. |
+| `get_hotspots` | Ranked list of high-risk files by complexity, coupling, and change frequency. |
+| `blast_radius` | Impact map for a specific file change. Which files, modules, and APIs are affected. |
 
 ---
 
-## Pro License (optional)
+## License Tiers
 
-Free tier gives you **15 calls per 24 hours** — no account needed.
+Free tier is active by default — no account or configuration required.
 
-For unlimited calls, get a Pro key at **[openkrak.dev](https://openkrak.dev)**:
+| Plan | Price | Queries |
+|------|-------|---------|
+| Free | $0 | 15 per 24-hour rolling window |
+| Pro Monthly | $8 / month | Unlimited |
+| Pro Annual | $67.20 / year | Unlimited |
+
+To activate a Pro license, add your key to the MCP config:
 
 ```jsonc
 {
@@ -173,7 +118,7 @@ For unlimited calls, get a Pro key at **[openkrak.dev](https://openkrak.dev)**:
     "openkrak": {
       "type": "local",
       "enabled": true,
-      "command": ["openkrak-mcp"],
+      "command": ["npx", "openkrak-mcp"],
       "env": {
         "OPENKRAK_KEY": "your-license-key"
       }
@@ -182,32 +127,22 @@ For unlimited calls, get a Pro key at **[openkrak.dev](https://openkrak.dev)**:
 }
 ```
 
-| Plan | Price | Limit |
-|------|-------|-------|
-| Free | $0 | 15 calls / 24h rolling |
-| Pro Monthly | $8/month | Unlimited |
-| Pro Annual | $67.20/year | Unlimited |
+License keys are available at [openkrak-web.vercel.app](https://openkrak-web.vercel.app). Delivered instantly via email after purchase. No subscription, no auto-renewal.
 
 ---
 
-## Privacy
+## Notes
 
-- Your codebase **never leaves your machine**
-- Analysis runs 100% locally via the Dorchester engine
-- Only license validation calls hit the network (to verify your key)
-- No telemetry, no file uploads
-
----
-
-## Tech
-
-- **Protocol:** MCP (Model Context Protocol) — open standard by Anthropic
-- **Analysis:** Static, deterministic — not AI/probabilistic
-- **Runtime:** Node.js ≥ 18
-- **License:** MIT
+- Static analysis only. No AI inference in the pipeline.
+- Anonymous usage telemetry is collected (query count, tool name, error events). No source code or file contents are transmitted.
+- License validation requires a network call to verify your key against the license server.
 
 ---
 
-## License
+## Repository
 
-MIT — © 2026 Faiz Hamizan
+[github.com/FrnzJulianBergmann/openkrak](https://github.com/FrnzJulianBergmann/openkrak)
+
+---
+
+MIT License — © 2026 Faiz Hamizan / Challanger Absolute Advance
